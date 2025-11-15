@@ -59,7 +59,7 @@ printable   ([\x20-\x7E])
 \"               { BEGIN(STR); str_buf = ""; }
 <STR>\\\\      { str_buf += '\\'; }
 <STR>\\\"      { str_buf += '\"'; }
-<STR>\\n      { str_buf += '\n'; }
+<STR>\\n      { str_buf += '\n'; } // When reaching new line or EOF we need to print error
 <STR>\\r      { str_buf += '\r'; }
 <STR>\\t      { str_buf += '\t'; }
 <STR>\\0      { str_buf += '\0'; }
@@ -67,9 +67,22 @@ printable   ([\x20-\x7E])
     int value = strtol(yytext+2, NULL, 16);
     str_buf += (char)value;
 }
+
+//Illegals inside string:
+<STR>\\ { errorUndefinedEscape(yytext); exit(0); } //Otherwise, illegal escape
+<STR>\n  { errorUnclosedString(); exit(0); }
+<STR>\r  { errorUnclosedString(); exit(0); }
+<STR><<EOF>> { errorUnclosedString(); exit(0); }
+
 <STR>\"  {
     BEGIN(INITIAL);
     printToken(yylineno, STRING, str_buf.c_str());
+}
+
+<STR>{printable}+      { str_buf += yytext; }
+
+<STR>.   {
+    errorUndefinedEscape(yytext);
 }
 
 {whitespace}+   ;
