@@ -52,13 +52,25 @@ printable   ([\x20-\x7E])
 
 {letter}({letter}|{digit})*         { printToken(yylineno, ID, yytext); }
 
-([1-9]{digit}*)|("0")        { printToken(yylineno, NUM, yytext); }
+[0-9]+ {
+    if (yyleng > 1 && yytext[0] == '0') {
+        errorUnknownChar('0');
+        exit(0);
+    }
+    printToken(yylineno, NUM, yytext);
+}
 
-([1-9]{digit}*b)|("0b")        { printToken(yylineno, NUM_B, yytext); }
+([0-9]*b) {
+    if (yyleng > 1 && yytext[0] == '0') {
+        errorUnknownChar('0');
+        exit(0);
+    }
+    printToken(yylineno, NUM, yytext);
+}
 
 \"               { BEGIN(STR); str_buf = ""; }
 <STR>\\\\      { str_buf += '\\'; }
-<STR>\\\"      { str_buf += '\"'; }
+<STR>\\\"      { str_buf += '"'; }
 <STR>\\n      { str_buf += '\n'; } // When reaching new line or EOF we need to print error
 <STR>\\r      { str_buf += '\r'; }
 <STR>\\t      { str_buf += '\t'; }
@@ -68,8 +80,32 @@ printable   ([\x20-\x7E])
     str_buf += (char)value;
 }
 
-//Illegals inside string:
-<STR>\\ { errorUndefinedEscape(yytext); exit(0); } //Otherwise, illegal escape
+<STR>\\x {
+    char* seq = yytext + 1;
+    errorUndefinedEscape(seq);
+    exit(0);
+}
+
+<STR>\\x[^"\t\r\n ] {
+    char* seq = yytext + 1;
+    errorUndefinedEscape(seq);
+    exit(0);
+}
+
+<STR>\\x[^"\t\r\n ]{2} {
+    char* seq = yytext + 1;
+    errorUndefinedEscape(seq);
+    exit(0);
+}
+
+<STR>\\[^\\"nrt0x] {
+    char bad = yytext[1];        // extract only the illegal char
+    char seq[2] = { bad, '\0' }; // make a null-terminated string
+    errorUndefinedEscape(seq); exit(0);
+} //Otherwise, illegal escape
+
+<STR>[^\\"\n\r]+      { str_buf += yytext; }
+
 <STR>\n  { errorUnclosedString(); exit(0); }
 <STR>\r  { errorUnclosedString(); exit(0); }
 <STR><<EOF>> { errorUnclosedString(); exit(0); }
@@ -79,16 +115,14 @@ printable   ([\x20-\x7E])
     printToken(yylineno, STRING, str_buf.c_str());
 }
 
-<STR>{printable}+      { str_buf += yytext; }
+{whitespace}+   ;
+.   {
+errorUnknownChar(yytext[0]);
+exit(0);
+}
 
 <STR>.   {
     errorUndefinedEscape(yytext);
-}
-
-{whitespace}+   ;
-.   {
-    errorUnknownChar(yytext[0]);
-    exit(0);
 }
 
 %%
