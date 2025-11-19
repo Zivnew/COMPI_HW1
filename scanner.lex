@@ -8,7 +8,6 @@ using namespace output;
 std::string str_buf;
 
 %}
-
 %option yylineno
 %option noyywrap
 digit       ([0-9])
@@ -60,13 +59,7 @@ printable   ([\x20-\x7E])
     printToken(yylineno, NUM, yytext);
 }
 
-([0-9]*b) {
-    if (yyleng > 1 && yytext[0] == '0') {
-        errorUnknownChar('0');
-        exit(0);
-    }
-    printToken(yylineno, NUM, yytext);
-}
+(0b|[1-9]{digit}*b)   { printToken(yylineno, NUM_B, yytext); }
 
 \"               { BEGIN(STR); str_buf = ""; }
 <STR>\\\\      { str_buf += '\\'; }
@@ -75,10 +68,15 @@ printable   ([\x20-\x7E])
 <STR>\\r      { str_buf += '\r'; }
 <STR>\\t      { str_buf += '\t'; }
 <STR>\\0      { str_buf += '\0'; }
+
 <STR>\\x[0-9A-Fa-f]{2}  {
     int value = strtol(yytext+2, NULL, 16);
     str_buf += (char)value;
 }
+
+<STR>\n  { errorUnclosedString(); exit(0); }
+<STR>\r  { errorUnclosedString(); exit(0); }
+<STR><<EOF>> { errorUnclosedString(); exit(0); }
 
 <STR>\\x {
     char* seq = yytext + 1;
@@ -105,10 +103,6 @@ printable   ([\x20-\x7E])
 } //Otherwise, illegal escape
 
 <STR>[^\\"\n\r]+      { str_buf += yytext; }
-
-<STR>\n  { errorUnclosedString(); exit(0); }
-<STR>\r  { errorUnclosedString(); exit(0); }
-<STR><<EOF>> { errorUnclosedString(); exit(0); }
 
 <STR>\"  {
     BEGIN(INITIAL);
